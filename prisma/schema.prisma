@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// টিম মেম্বার
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(AGENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// Facebook Page বা Instagram অ্যাকাউন্ট
+model ConnectedAccount {
+  id           String      @id @default(cuid())
+  platform     Platform
+  pageId       String      @unique
+  pageName     String
+  accessToken  String
+  profilePic   String?
+  isActive      Boolean     @default(true)
+  lastSyncedAt  DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  conversations Conversation[]
+
+  @@map("connected_accounts")
+}
+
+// একজন কাস্টমারের সাথে থ্রেড
+model Conversation {
+  id               String           @id @default(cuid())
+  externalId       String           @unique
+  customerName     String?
+  customerPic      String?
+  customerId       String
+  customerPhone    String?
+  customerAddress  String?
+  tags             String[]
+  label            String?
+  snoozedUntil     DateTime?
+  status           ConvoStatus      @default(OPEN)
+  hasUnread        Boolean          @default(false)
+  isStarred        Boolean          @default(false)
+  lastMessageAt    DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  accountId        String
+  account          ConnectedAccount @relation(fields: [accountId], references: [id])
+  messages         Message[]
+  orders           Order[]
+  notes            ConversationNote[]
+
+  @@map("conversations")
+}
+
+// Internal note on a conversation
+model ConversationNote {
+  id             String       @id @default(cuid())
+  text           String
+  createdAt      DateTime     @default(now())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("conversation_notes")
+}
+
+// Customer Order
+model Order {
+  id             String      @id @default(cuid())
+  orderId        String
+  items          String
+  total          Float
+  status         OrderStatus @default(PENDING)
+  note           String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  @@map("orders")
+}
+
+// একটা মেসেজ
+model Message {
+  id             String         @id @default(cuid())
+  externalId     String         @unique
+  text           String?
+  attachmentUrl  String?
+  attachmentType String?
+  direction      Direction
+  deliveryStatus DeliveryStatus @default(SENT)
+  replyToText      String?
+  customerReaction String?
+  agentReaction    String?
+  sentAt           DateTime
+  createdAt      DateTime       @default(now())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId, sentAt])
+  @@map("messages")
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum Platform {
+  FACEBOOK
+  INSTAGRAM
+}
+
+enum ConvoStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum Direction {
+  INCOMING
+  OUTGOING
+}
+
+enum DeliveryStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  DELIVERED
+  CANCELLED
+  RETURN
+  PAID_RETURN
+  EXCHANGE
+  STOCK_OUT
+  PRE_ORDER
+}
+
+// Product catalog
+model Product {
+  id             String        @id @default(cuid())
+  name           String
+  sku            String        @unique
+  category       String
+  price          Float
+  salePrice      Float?
+  description    String?
+  tags           String[]
+  status         ProductStatus @default(ACTIVE)
+  imageUrls      String[]
+  stock          Int           @default(0)
+  trackStock     Boolean       @default(true)
+  lowStockAlert  Int           @default(5)
+  internalNote   String?
+  attributes     Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  productVariants ProductVariant[]
+
+  @@map("products")
+}
+
+model ProductVariant {
+  id          String        @id @default(cuid())
+  productId   String
+  product     Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attributes  Json
+  sku         String        @unique
+  price       Float
+  stock       Int           @default(0)
+  status      ProductStatus @default(ACTIVE)
+  imageUrl    String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("product_variants")
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@map("push_subscriptions")
+}
